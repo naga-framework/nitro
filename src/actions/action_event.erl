@@ -1,18 +1,21 @@
 -module(action_event).
 -author('Maxim Sokhatsky').
+-author('Andrey Martemyanov').
 -include_lib("nitro/include/nitro.hrl").
 -compile(export_all).
 
+-define(B(E), nitro:to_binary(E)).
+
 render_action(#event{source=undefined}) -> [];
-render_action(#event{postback=Postback,actions=_Actions,source=Source,target=Control,type=Type,delegate=Delegate,validation=Validation}) ->
-    Element = nitro:to_list(Control),
-    Data=list_to_binary([<<"[tuple(tuple(utf8_toByteArray('">>,Element,<<"'),bin('detail')),[])">>,
-         [ begin {SrcType,Src2}=case is_atom(Src) of
-                 true -> { <<"atom">>,atom_to_list(Src) };
-                 false -> { <<"utf8_toByteArray">>,Src } end,
-             [ <<",tuple(">>,SrcType,<<"('">>,Src2,<<"'),querySource('">>,Src2,<<"'))">> ]
-             end || Src <- Source ],<<"]">>]),
-    PostbackBin = wf_event:new(Postback, Element, Delegate, event, Data, Source, Validation),
-    [list_to_binary([<<"{ var x=qi('">>,Element,<<"'); x && x.addEventListener('">>,
-        nitro:to_binary(Type),<<"',function (event){ ">>,
-        PostbackBin,<<"});};">>])].
+render_action(#event{postback=Postback,actions=_A,source=Source,target=Control,type=Type,delegate=D,validation=V}) ->
+    E = ?B(Control),
+    ValidationSource = [ S || S <- Source, not is_tuple(S) ],
+    PostbackBin = wf_event:new(Postback, E, D, event, data(E,Source), ValidationSource, V),
+    ["{var x=qi('",E,"'); x && x.addEventListener('",?B(Type),"',function (event){ ",PostbackBin,"});};"].
+
+data(E,SourceList) ->
+    Type=fun(A) when is_atom(A) -> [ "atom('",atom_to_list(A),"')" ]; (A) -> [ "utf8_toByteArray('",A,"')" ] end,
+    list_to_binary(["[tuple(tuple(utf8_toByteArray('",E,"'),bin('detail')),[])",
+        [ case S of {Id,Code} -> [ ",tuple(",Type(Id),",",Code,")" ];
+                            _ -> [ ",tuple(",Type(S),",querySource('",?B(S),"'))" ]
+          end || S <- SourceList ],"]"]).
