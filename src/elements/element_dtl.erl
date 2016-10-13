@@ -3,7 +3,10 @@
 -include("nitro.hrl").
 -compile(export_all).
 
-%% for naga framework
+render_element(Record=#dtl{file={M}}) ->
+        {ok,R} = render(M, Record#dtl.js_escape, [{K,nitro:render(V)} || {K,V} <- Record#dtl.bindings] ++
+        if Record#dtl.bind_script==true -> [{script,nitro:script()}]; true-> [] end),
+    R;
 render_element(Record=#dtl{file={App,Ctrl,Act,Ext}}) ->
     M = list_to_atom(nitro:to_list(App)++
                      "_view_"++nitro:to_list(Ctrl)++
